@@ -7,4 +7,4 @@ GIT_TAG=$2
 FILENAME=insight-api.${GIT_TAG}
 OLD_PWD=$(pwd)
 
-go build -o ${GIT_TAG}/${FILENAME} .
+go build -o ${DIST_PATH}/${FILENAME} .

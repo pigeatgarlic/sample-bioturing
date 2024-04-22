@@ -29,6 +29,11 @@ func main(){
 		w.Write(bytes[:n])
 	})
 
+
+	http.HandleFunc("/log",func(w http.ResponseWriter, r *http.Request) {
+
+	})
+
 	fmt.Printf("hello world\n")
 	panic(server.ListenAndServe())
 }
