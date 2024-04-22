@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -43,11 +42,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	} else if resp.StatusCode != 200 {
-		bytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-		panic(fmt.Errorf("failed to call ready url %s", string(bytes)))
+		panic(fmt.Errorf("failed to call ready url %s", resp.Status))
 	}
 
 	server := http.Server{Addr: fmt.Sprintf("0.0.0.0:%d", port)}
