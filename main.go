@@ -9,8 +9,11 @@ import (
 )
 
 func GetFreePort() (port int, err error) {
-	if addr, err := net.ResolveTCPAddr("tcp", "localhost:0"); err != nil {
-		return addr.Port, nil
+	if addr, err := net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
+		if listener, err := net.ListenTCP("tcp", addr); err == nil {
+			defer listener.Close()
+			return listener.Addr().(*net.TCPAddr).Port, nil
+		}
 	}
 
 	return 0, err
