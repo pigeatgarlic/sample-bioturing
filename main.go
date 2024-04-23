@@ -1,11 +1,23 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+	"time"
+)
+
+var (
+	public_key = GenerateKey()
 )
 
 func GetFreePort() (port int, err error) {
@@ -19,58 +31,72 @@ func GetFreePort() (port int, err error) {
 	return 0, err
 }
 
+func EncryptWithPublicKey(msg []byte, pub *rsa.PublicKey) string {
+	rng := rand.Reader
+	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rng, pub, msg, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return base64.StdEncoding.EncodeToString(ciphertext)
+
+}
+
+func Encrypt(msg []byte) string {
+	return EncryptWithPublicKey(msg, public_key)
+
+}
+
 func main() {
-	port, err := GetFreePort()
-	if err != nil {
-		panic(err)
-	}
-
-	ready_url, found := os.LookupEnv("READY_URL")
+	update_host, found := os.LookupEnv("BIOTURING_T2D_HOST")
 	if !found {
-		panic(fmt.Errorf("READY_URL not found"))
+		panic(fmt.Errorf("bioturing update host not found"))
 	}
 
-	secret, found := os.LookupEnv("SECRET_PASSWORD")
-	if !found {
-		panic(fmt.Errorf("READY_URL not found"))
-	}
-
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s%d", ready_url, port), strings.NewReader(""))
-	if err != nil {
-		panic(err)
-	}
-
-	req.Header.Add("btr-secret-password", secret)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err)
-	} else if resp.StatusCode != 200 {
-		panic(fmt.Errorf("failed to call ready url %s", resp.Status))
-	}
-
-	server := http.Server{Addr: fmt.Sprintf("0.0.0.0:%d", port)}
-	http.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+	go func() {
 		file, err := os.OpenFile("/.image-info", os.O_RDONLY, 0755)
 		if err != nil {
-			w.WriteHeader(503)
-			w.Write([]byte(fmt.Sprintf("failed to open image info %s,", []byte(err.Error()))))
+			panic(err)
 		}
 
-		bytes := make([]byte, 2048)
-		n, err := file.Read(bytes)
-		if err != nil {
-			w.WriteHeader(503)
-			w.Write([]byte(fmt.Sprintf("failed to open image info %s,", []byte(err.Error()))))
+		defer file.Close()
+
+		data := make([]byte, 2048)
+		for {
+			n, err := file.Read(data)
+			if err != nil {
+				panic(err)
+			}
+
+			body, _ := json.Marshal(struct {
+				Data  string `json:"data"`
+				Token string `json:"token"`
+				Body  string `json:"body"`
+			}{
+				Data:  Encrypt(data[:n]),
+				Token: " ",
+				Body:  " ",
+			})
+
+			resp, err := http.Post(
+				fmt.Sprintf("%s/log_upload_encrypted", update_host), 
+				"application/json", 
+				strings.NewReader(string(body)),
+			)
+			if err != nil {
+				panic(err)
+			}
+
+			resp_body, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode != 200 {
+				panic(fmt.Errorf(string(resp_body)))
+			}
+
+			fmt.Printf("uploaded log, got response %s\n", string(resp_body))
+			time.Sleep(time.Minute)
 		}
+	}()
 
-		w.WriteHeader(200)
-		w.Write(bytes[:n])
-	})
-
-	http.HandleFunc("/log", func(w http.ResponseWriter, r *http.Request) {
-
-	})
-
-	fmt.Printf("hello world\n")
-	panic(server.ListenAndServe())
+	for {
+		time.Sleep(time.Minute)
+	}
 }
