@@ -1,15 +1,10 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -21,9 +16,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-var (
-	public_key = GenerateKey()
-)
 
 func GetFreePort() (port int, err error) {
 	if addr, err := net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
@@ -36,33 +28,25 @@ func GetFreePort() (port int, err error) {
 	return 0, err
 }
 
-func EncryptWithPublicKey(msg []byte, pub *rsa.PublicKey) string {
-	rng := rand.Reader
-	ciphertext, err := rsa.EncryptOAEP(sha256.New(), rng, pub, msg, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return base64.StdEncoding.EncodeToString(ciphertext)
-
-}
-
-func Encrypt(msg []byte) string {
-	return EncryptWithPublicKey(msg, public_key)
-
-}
-
 func UploadInfoFunction(update_host, msg string) {
-	fmt.Printf("%s\n", msg)
-	return
+	raw, _ := json.Marshal(struct {
+		Timestamp string `json:"timestamp"`
+		Level     string `json:"level"`
+		Source    string `json:"source"`
+		Data      string `json:"data"`
+	}{
+		Data:      msg,
+		Source:    "unknown",
+		Level:     "unknown",
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
 
 	body, _ := json.Marshal(struct {
-		Data  string `json:"data"`
+		Data []string `json:"data"`
 		Token string `json:"token"`
-		Body  string `json:"body"`
 	}{
-		Data:  Encrypt([]byte(msg)),
-		Token: " ",
-		Body:  " ",
+		Data: Encrypt(raw),
+		Token: "token",
 	})
 
 	resp, err := http.Post(
@@ -79,7 +63,7 @@ func UploadInfoFunction(update_host, msg string) {
 		panic(fmt.Errorf(string(resp_body)))
 	}
 
-	fmt.Printf("uploaded log, got response %s\n", string(resp_body))
+	fmt.Println(msg)
 }
 
 func captureLog(update_host string, proc *exec.Cmd) {
@@ -103,10 +87,10 @@ func captureLog(update_host string, proc *exec.Cmd) {
 			if err != nil {
 				end <- err
 			}
-			for _,lines  := range strings.Split(string(buffer[:size]), "\n") {
-				for _,line  := range strings.Split(lines, "\t") {
+			for _, lines := range strings.Split(string(buffer[:size]), "\n") {
+				for _, line := range strings.Split(lines, "\t") {
 					timestamp := time.Now().Format(time.DateTime)
-					UploadInfoFunction(update_host, fmt.Sprintf("%s : %s",timestamp,line))
+					UploadInfoFunction(update_host, fmt.Sprintf("%s : %s", timestamp, line))
 				}
 			}
 
@@ -129,7 +113,8 @@ func main() {
 	manifest := "./.image-info"
 	update_host, found := os.LookupEnv("BIOTURING_T2D_HOST")
 	if !found {
-		fmt.Errorf("bioturing update host not found") // TODO
+		fmt.Println("bioturing update host not found") // TODO
+		update_host = "http://localhost:8080"
 	}
 
 	go func() {
@@ -174,7 +159,7 @@ func main() {
 			return nil
 		})
 
-		fmt.Printf("watching files %v\n",watching_files)
+		fmt.Printf("watching files %v\n", watching_files)
 		if err != nil {
 			fmt.Printf("failed to initialize file watcher %s\n", err.Error())
 		}
@@ -195,7 +180,7 @@ func main() {
 
 					process.Kill()
 					delete_files = append(delete_files, watching_file)
-					fmt.Printf("deleting file watcher for %s\n",watching_file)
+					fmt.Printf("deleting file watcher for %s\n", watching_file)
 				}
 
 				for _, file := range delete_files {
