@@ -16,7 +16,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-
 func GetFreePort() (port int, err error) {
 	if addr, err := net.ResolveTCPAddr("tcp", "localhost:0"); err == nil {
 		if listener, err := net.ListenTCP("tcp", addr); err == nil {
@@ -42,10 +41,10 @@ func UploadInfoFunction(update_host, msg string) {
 	})
 
 	body, _ := json.Marshal(struct {
-		Data []string `json:"data"`
-		Token string `json:"token"`
+		Data  []string `json:"data"`
+		Token string   `json:"token"`
 	}{
-		Data: Encrypt(raw),
+		Data:  Encrypt(raw),
 		Token: "token",
 	})
 
@@ -89,6 +88,10 @@ func captureLog(update_host string, proc *exec.Cmd) {
 			}
 			for _, lines := range strings.Split(string(buffer[:size]), "\n") {
 				for _, line := range strings.Split(lines, "\t") {
+					if len(line) == 0{
+						continue
+					}
+
 					timestamp := time.Now().Format(time.DateTime)
 					UploadInfoFunction(update_host, fmt.Sprintf("%s : %s", timestamp, line))
 				}
@@ -178,7 +181,10 @@ func main() {
 						continue
 					}
 
-					process.Kill()
+					if process != nil {
+						process.Kill()
+					}
+
 					delete_files = append(delete_files, watching_file)
 					fmt.Printf("deleting file watcher for %s\n", watching_file)
 				}
@@ -203,8 +209,7 @@ func main() {
 						continue
 					}
 
-					fmt.Printf("starting tail -f %s\n", shouldwatch_file)
-					cmd := exec.Command("tail", "-f", shouldwatch_file)
+					cmd := exec.Command("tail","-n0", "-f", shouldwatch_file)
 					go captureLog(update_host, cmd)
 					watch_process[shouldwatch_file] = cmd.Process
 				}
@@ -221,8 +226,18 @@ func main() {
 				}
 
 				if event.Op == fsnotify.Create {
-					watching_files = append(watching_files, event.Name)
-					fmt.Printf("new watching file: %v\n", watching_files)
+					if f, err := os.Open(event.Name); err != nil {
+						fmt.Printf("new watching file: %v\n", event.Name)
+					} else {
+						if info, err := f.Stat(); err == nil {
+							if info.IsDir() {
+								watcher.Add(event.Name)
+							} else {
+								watching_files = append(watching_files, event.Name)
+								fmt.Printf("new watching file: %v\n", event.Name)
+							}
+						}
+					}
 				} else if event.Op == fsnotify.Remove {
 					temp := []string{}
 					for _, file := range watching_files {
