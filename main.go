@@ -1,13 +1,13 @@
 package main
 
 import (
-	// "encoding/json"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"net"
+	"net/http"
 
-	// "net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,39 +27,39 @@ func GetFreePort() (port int, err error) {
 }
 
 func UploadInfoFunction(update_host, source, timestamp, msg string) {
-	// raw, _ := json.Marshal(struct {
-	// 	Timestamp string `json:"timestamp"`
-	// 	Level     string `json:"level"`
-	// 	Source    string `json:"source"`
-	// 	Data      string `json:"data"`
-	// }{
-	// 	Data:      msg,
-	// 	Source:    "unknown",
-	// 	Level:     "unknown",
-	// 	Timestamp: time.Now().Format(time.RFC3339),
-	// })
+	raw, _ := json.Marshal(struct {
+		Timestamp string `json:"timestamp"`
+		Level     string `json:"level"`
+		Source    string `json:"source"`
+		Data      string `json:"data"`
+	}{
+		Data:      msg,
+		Source:    "unknown",
+		Level:     "unknown",
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
 
-	// body, _ := json.Marshal(struct {
-	// 	Data []string `json:"data"`
-	// 	Token string `json:"token"`
-	// }{
-	// 	Data: Encrypt(raw),
-	// 	Token: "token",
-	// })
+	body, _ := json.Marshal(struct {
+		Data  []string `json:"data"`
+		Token string   `json:"token"`
+	}{
+		Data:  Encrypt(raw),
+		Token: "token",
+	})
 
-	// resp, err := http.Post(
-	// 	fmt.Sprintf("%s/log_upload_encrypted", update_host),
-	// 	"application/json",
-	// 	strings.NewReader(string(body)),
-	// )
-	// if err != nil {
-	// 	panic(err)
-	// }
+	resp, err := http.Post(
+		fmt.Sprintf("%s/log_upload_encrypted", update_host),
+		"application/json",
+		strings.NewReader(string(body)),
+	)
+	if err != nil {
+		panic(err)
+	}
 
-	// resp_body, _ := io.ReadAll(resp.Body)
-	// if resp.StatusCode != 200 {
-	// 	panic(fmt.Errorf(string(resp_body)))
-	// }
+	resp_body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		panic(fmt.Errorf(string(resp_body)))
+	}
 
 	fmt.Printf("%s %s %s\n", source, timestamp, msg)
 }
