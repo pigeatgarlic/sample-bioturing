@@ -53,15 +53,15 @@ func UploadInfoFunction(update_host, source, timestamp, msg string) {
 		strings.NewReader(string(body)),
 	)
 	if err != nil {
-		panic(err)
+		fmt.Printf("error upload log %s\n", err.Error())
+		return
 	}
 
 	resp_body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		panic(fmt.Errorf(string(resp_body)))
+		fmt.Printf("error upload log %s\n", string(resp_body))
+		return
 	}
-
-	fmt.Printf("%s %s %s\n", source, timestamp, msg)
 }
 
 func captureLog(update_host string, proc *exec.Cmd) {
@@ -96,7 +96,7 @@ func captureLog(update_host string, proc *exec.Cmd) {
 	fmt.Printf("file watcher self closed %s\n", (<-end).Error())
 }
 
-func IterateFolder(path string) []string {
+func IterateFolder(path string) ([]string, error) {
 	watching_files := []string{}
 	err := filepath.Walk(path, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
@@ -110,10 +110,10 @@ func IterateFolder(path string) []string {
 		return nil
 	})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return watching_files
+	return watching_files, nil
 }
 
 func main() {
@@ -128,7 +128,8 @@ func main() {
 	go func() {
 		file, err := os.OpenFile(manifest, os.O_RDONLY, 0755)
 		if err != nil {
-			panic(err)
+			fmt.Printf("error open manifest file %s\n", err.Error())
+			return
 		}
 
 		defer file.Close()
@@ -136,7 +137,9 @@ func main() {
 		for {
 			data, err := io.ReadAll(file)
 			if err != nil {
-				panic(err)
+				fmt.Printf("error read manifest file %s\n", err.Error())
+				time.Sleep(time.Minute)
+				continue
 			}
 
 			// UploadInfoFunction(update_host, string(data))
@@ -147,7 +150,11 @@ func main() {
 
 	go func() {
 		watch_process := map[string]*os.Process{}
-		watching_files := IterateFolder(watch_folder)
+		watching_files, err := IterateFolder(watch_folder)
+		if err != nil {
+			fmt.Printf("error iterate folder %s\n", err.Error())
+			return
+		}
 
 		go func() {
 			for {
@@ -202,7 +209,11 @@ func main() {
 		}()
 
 		for {
-			watching_files = IterateFolder(watch_folder)
+			if fs, err := IterateFolder(watch_folder); err == nil {
+				watching_files = fs
+			} else {
+				fmt.Printf("error iterate folder %s\n", err.Error())
+			}
 			time.Sleep(time.Second)
 		}
 	}()
